@@ -139,12 +139,12 @@ export const ORDER_VALIDATION_WITH_EXTERNAL: ValidationConfig<OrderEntity> = {
         Validators.async(
           async (value, context) => {
             const inventoryService = context.external?.inventoryService;
-            
+
             if (!inventoryService) return true;
-            
-            const products = value as string[];
-            
-            // Check stock for each product
+
+            // Per-cell: value is single string; whole-array: value is string[]
+            const products = Array.isArray(value) ? value : [value];
+
             for (const productCode of products) {
               const inStock = await inventoryService.checkStock(productCode);
               if (!inStock) {

@@ -36,8 +36,9 @@ import { ORDER_VALIDATION_WITH_EXTERNAL } from './order.validation.external';
       [store]="orderStore"
       [config]="orderConfig"
       [saveUpdatesStore]="false"
+      [validationService]="validationService"
       (save)="onSave($event)"
-      (fieldEdit)="onFieldEdit($event.entityId, $event.entity, $event.field, $event.value)">
+      (fieldEdit)="onFieldEdit($event.entityId, $event.entity, $event.field, $event.value, $event.arrayIndex)">
     </app-generic-table>
   `,
   providers: [
@@ -110,7 +111,7 @@ export class OrderTableWithExternalComponent implements OnInit {
   theme: 'default' | 'minimal' | 'emoji' = 'emoji';
   locale = 'en';
   
-  constructor(private validationService: ValidationService<OrderEntity>) {
+  constructor(public validationService: ValidationService<OrderEntity>) {
     this.orderStore = new EntityStore<OrderEntity, OrderDTO>(ORDER_COMPUTE);
     this.orderConfig = createOrderTableConfig();
   }
@@ -196,17 +197,17 @@ export class OrderTableWithExternalComponent implements OnInit {
   }
 
   /**
-   * Handle field edit - pass external context
+   * Handle field edit - pass external context. For array cells, arrayIndex is set.
    */
   async onFieldEdit(
     entityId: string,
     entity: OrderEntity,
     field: keyof OrderEntity,
-    value: any
+    value: any,
+    arrayIndex?: number
   ): Promise<void> {
     const external = this.buildExternalContext();
 
-    // Validate the edited field (value is the new value)
     await this.validationService.validateField(
       entityId,
       entity,
@@ -214,11 +215,19 @@ export class OrderTableWithExternalComponent implements OnInit {
       value,
       'change',
       undefined,
-      external
+      external,
+      arrayIndex
     );
 
-    // Validate dependent fields using entity state WITH this edit applied
-    const entityWithEdit = { ...entity, [field]: value } as OrderEntity;
+    let entityWithEdit: OrderEntity;
+    if (arrayIndex !== undefined && Array.isArray(entity[field])) {
+      const arr = [...(entity[field] as unknown[])];
+      arr[arrayIndex] = value;
+      entityWithEdit = { ...entity, [field]: arr } as OrderEntity;
+    } else {
+      entityWithEdit = { ...entity, [field]: value } as OrderEntity;
+    }
+
     await this.validationService.validateDependentFields(
       entityId,
       entityWithEdit,

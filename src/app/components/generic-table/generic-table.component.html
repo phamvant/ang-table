@@ -56,6 +56,7 @@
             [attr.rowspan]="getRowspan(col, rowIndex)"
             [class.hidden-cell]="isHidden(col, rowIndex)"
             [class.edited]="hasChanges(row)"
+            [class.cell-error]="validationService && getCellErrors(row.entityId, col.type === 'array' ? col.arrayField : col.field, col.type === 'array' ? col.arrayIndex : undefined).length > 0"
             [class.sticky-column]="col.sticky"
             [class]="col.cssClass">
 
@@ -101,6 +102,13 @@
                    class="cell-input"
                    [value]="getCellValue(row, col)"
                    (change)="onCellEdit(row, col, $any($event.target).value); saveEntity(row)">
+
+            <!-- Cell validation errors -->
+            <span *ngIf="validationService && getCellErrors(row.entityId, col.type === 'array' ? col.arrayField : col.field, col.type === 'array' ? col.arrayIndex : undefined).length as errCount"
+                  class="cell-error-messages"
+                  [attr.aria-label]="'Validation errors'">
+              {{ getCellErrors(row.entityId, col.type === 'array' ? col.arrayField : col.field, col.type === 'array' ? col.arrayIndex : undefined)[0].message }}
+            </span>
 
           </ng-container>
 

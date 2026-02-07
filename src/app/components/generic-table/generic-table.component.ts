@@ -20,6 +20,8 @@ import { ColumnConfig, TableConfig } from '../../core/models/table-config.models
 import { EntityStore } from '../../core/services/entity.store';
 import { EditBufferService, ArrayEdit } from '../../core/services/edit-buffer.service';
 import { TableViewService, ExpandedRow } from '../../core/services/table-view.service';
+import { ValidationService } from '../../core/services/validation.service';
+import { ValidationError } from '../../core/models/validation.models';
 
 /**
  * Fully generic reusable table component
@@ -73,12 +75,15 @@ export class GenericTableComponent<
    */
   @Input() saveUpdatesStore = true;
 
+  /** Optional validation service for per-cell error display */
+  @Input() validationService?: ValidationService<TEntity>;
+
   /** Events */
   @Output() save = new EventEmitter<{ id: string; changes: Partial<TEntity>; arrays: ArrayEdit<TEntity>[] }>();
   @Output() cancel = new EventEmitter<string>();
   @Output() rowClick = new EventEmitter<ExpandedRow<TDTO>>();
-  /** Emitted when a cell is edited (for live validation with external context) */
-  @Output() fieldEdit = new EventEmitter<{ entityId: string; entity: TEntity; field: keyof TEntity; value: any }>();
+  /** Emitted when a cell is edited (for live validation). arrayIndex set for array cells. */
+  @Output() fieldEdit = new EventEmitter<{ entityId: string; entity: TEntity; field: keyof TEntity; value: any; arrayIndex?: number }>();
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -111,6 +116,13 @@ export class GenericTableComponent<
 
     // Load initial page
     this.loadPage(0);
+
+    // React to validation state changes for cell error display
+    if (this.validationService?.onStateChange) {
+      this.validationService.onStateChange
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(() => this.cdr.markForCheck());
+    }
   }
 
   ngOnDestroy(): void {
@@ -225,19 +237,26 @@ export class GenericTableComponent<
   onCellEdit(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>, value: any): void {
     if (!this.editBuffer) return;
 
+    const entity = this.store.getOne(row.entityId);
+
     if (col.type === 'array' && col.arrayField && col.arrayIndex !== undefined) {
-      // Edit array item
       this.editBuffer.updateArrayItem(
         row.entityId,
         col.arrayField,
         col.arrayIndex,
         value
       );
+      if (entity) {
+        this.fieldEdit.emit({
+          entityId: row.entityId,
+          entity,
+          field: col.arrayField,
+          value,
+          arrayIndex: col.arrayIndex
+        });
+      }
     } else {
-      // Edit base field
       this.editBuffer.updateField(row.entityId, col.field as keyof TEntity, value);
-      // Emit for parent (e.g. live validation with external context)
-      const entity = this.store.getOne(row.entityId);
       if (entity) {
         this.fieldEdit.emit({
           entityId: row.entityId,
@@ -249,6 +268,13 @@ export class GenericTableComponent<
     }
 
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Get validation errors for a cell (for template). Uses validationService when provided.
+   */
+  getCellErrors(entityId: string, field: string, arrayIndex?: number): ValidationError[] {
+    return this.validationService?.getCellErrors(entityId, field, arrayIndex) ?? [];
   }
 
   /**

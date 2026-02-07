@@ -25,6 +25,7 @@ import {
 export class ValidationService<T extends BaseEntity = BaseEntity> {
   
   private validationStates$ = new BehaviorSubject<Record<string, ValidationState>>({});
+  private stateChange$ = new Subject<void>();
   private asyncValidation$ = new Subject<{
     entityId: string;
     field: keyof T;
@@ -37,41 +38,53 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
   }
 
   /**
+   * Cell key for storage: field or field_arrayIndex
+   */
+  private cellKey(field: string, arrayIndex?: number): string {
+    return arrayIndex === undefined ? field : `${field}_${arrayIndex}`;
+  }
+
+  /**
    * Setup async validation with debouncing
    */
   private setupAsyncValidation(): void {
     this.asyncValidation$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged((a, b) => 
-          a.entityId === b.entityId && 
+        distinctUntilChanged((a, b) =>
+          a.entityId === b.entityId &&
           a.field === b.field &&
+          (a.context.arrayIndex ?? -1) === (b.context.arrayIndex ?? -1) &&
           JSON.stringify(a.context.value) === JSON.stringify(b.context.value)
         )
       )
       .subscribe(async ({ entityId, field, validator, context }) => {
-        this.setFieldValidating(entityId, String(field), true);
-        
+        const key = String(field);
+        const arrayIndex = context.arrayIndex;
+        this.setFieldValidating(entityId, key, true);
+
         try {
           const result = await validator.validate(context);
-          this.setFieldErrors(entityId, String(field), result.errors || []);
+          this.setFieldErrors(entityId, key, result.errors || [], arrayIndex);
         } catch (error) {
           console.error('Async validation error:', error);
-          this.setFieldErrors(entityId, String(field), [{
-            field: String(field),
+          this.setFieldErrors(entityId, key, [{
+            field: key,
             message: 'Validation error occurred',
             code: 'ASYNC_ERROR',
-            severity: 'error'
-          }]);
+            severity: 'error',
+            arrayIndex
+          }], arrayIndex);
         } finally {
-          this.setFieldValidating(entityId, String(field), false);
+          this.setFieldValidating(entityId, key, false);
         }
       });
   }
 
   /**
-   * Validate single field
-   * 
+   * Validate single field (or single array cell when arrayIndex is provided).
+   *
+   * @param arrayIndex - When validating an array field, the index of the cell.
    * @param external - External context (component state, services, etc.)
    */
   async validateField(
@@ -81,9 +94,9 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
     value: any,
     trigger: 'blur' | 'change' | 'submit' | 'always' = 'change',
     allEntities?: T[],
-    external?: ExternalContext
+    external?: ExternalContext,
+    arrayIndex?: number
   ): Promise<ValidationResult> {
-    
     const fieldRules = this.config.fields.find(f => f.field === field);
     if (!fieldRules) {
       return { valid: true };
@@ -93,39 +106,38 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
       entity,
       field,
       value,
-      oldValue: entity[field],
+      oldValue: Array.isArray(entity[field]) && arrayIndex !== undefined
+        ? (entity[field] as any[])[arrayIndex]
+        : entity[field],
       allEntities,
-      external  // 🆕 Pass external context
+      external,
+      arrayIndex
     };
 
-    // Filter validators by trigger
-    const validators = fieldRules.validators.filter(v => 
+    const validators = fieldRules.validators.filter(v =>
       !v.trigger || v.trigger === trigger || v.trigger === 'always'
     );
 
     const allErrors: ValidationError[] = [];
-    
+
     for (const validator of validators) {
       if (validator.async) {
-        // Async validators - debounced
         this.asyncValidation$.next({ entityId, field, validator, context });
         continue;
       }
 
-      // Sync validators
       const result = await validator.validate(context);
-      
+
       if (result.errors && result.errors.length > 0) {
-        allErrors.push(...result.errors);
-        
+        const withIndex = result.errors.map(e => ({ ...e, arrayIndex }));
+        allErrors.push(...withIndex);
         if (fieldRules.stopOnFirstError) {
           break;
         }
       }
     }
 
-    // Update state
-    this.setFieldErrors(entityId, String(field), allErrors);
+    this.setFieldErrors(entityId, String(field), allErrors, arrayIndex);
 
     return {
       valid: allErrors.filter(e => e.severity === 'error').length === 0,
@@ -134,8 +146,8 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
   }
 
   /**
-   * Validate entire entity
-   * 
+   * Validate entire entity (including each array cell when field is an array).
+   *
    * @param external - External context (component state, services, etc.)
    */
   async validateEntity(
@@ -145,28 +157,48 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
     allEntities?: T[],
     external?: ExternalContext
   ): Promise<ValidationResult> {
-    
     const allErrors: ValidationError[] = [];
+    const submitTrigger = trigger === 'submit' ? 'submit' : 'change';
 
-    // 1. Validate all fields
     for (const fieldRules of this.config.fields) {
       const value = entity[fieldRules.field];
-      const result = await this.validateField(
-        entityId,
-        entity,
-        fieldRules.field,
-        value,
-        trigger === 'submit' ? 'submit' : 'change',
-        allEntities,
-        external  // 🆕 Pass external context
-      );
-      
-      if (result.errors) {
-        allErrors.push(...result.errors);
-      }
 
-      if (this.config.options?.stopOnFirstFieldError && !result.valid) {
-        break;
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          const result = await this.validateField(
+            entityId,
+            entity,
+            fieldRules.field,
+            value[i],
+            submitTrigger,
+            allEntities,
+            external,
+            i
+          );
+          if (result.errors) {
+            allErrors.push(...result.errors);
+          }
+          if (this.config.options?.stopOnFirstFieldError && !result.valid) {
+            break;
+          }
+        }
+      } else {
+        const result = await this.validateField(
+          entityId,
+          entity,
+          fieldRules.field,
+          value,
+          submitTrigger,
+          allEntities,
+          external,
+          undefined
+        );
+        if (result.errors) {
+          allErrors.push(...result.errors);
+        }
+        if (this.config.options?.stopOnFirstFieldError && !result.valid) {
+          break;
+        }
       }
     }
 
@@ -197,8 +229,8 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
   }
 
   /**
-   * Validate field change (when field depends on others)
-   * 
+   * Validate field change (when field depends on others).
+   *
    * @param external - External context
    */
   async validateDependentFields(
@@ -208,22 +240,45 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
     allEntities?: T[],
     external?: ExternalContext
   ): Promise<void> {
-    // Find fields that depend on the changed field
     const dependentFields = this.config.fields.filter(fieldRules =>
       fieldRules.validators.some(v => v.dependsOn?.includes(changedField))
     );
 
     for (const fieldRules of dependentFields) {
-      await this.validateField(
-        entityId,
-        entity,
-        fieldRules.field,
-        entity[fieldRules.field],
-        'change',
-        allEntities,
-        external  // 🆕 Pass external
-      );
+      const value = entity[fieldRules.field];
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          await this.validateField(
+            entityId,
+            entity,
+            fieldRules.field,
+            value[i],
+            'change',
+            allEntities,
+            external,
+            i
+          );
+        }
+      } else {
+        await this.validateField(
+          entityId,
+          entity,
+          fieldRules.field,
+          value,
+          'change',
+          allEntities,
+          external,
+          undefined
+        );
+      }
     }
+  }
+
+  /**
+   * Emits when any validation state changes (for triggering change detection in consumers).
+   */
+  get onStateChange(): Observable<void> {
+    return this.stateChange$.asObservable();
   }
 
   /**
@@ -236,12 +291,29 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
   }
 
   /**
-   * Get field errors
+   * Get field errors (Observable). For array fields, pass arrayIndex to get a specific cell.
    */
-  getFieldErrors(entityId: string, field: string): Observable<ValidationError[]> {
+  getFieldErrors(entityId: string, field: string, arrayIndex?: number): Observable<ValidationError[]> {
+    const key = this.cellKey(field, arrayIndex);
     return this.validationStates$.pipe(
-      map(states => states[entityId]?.fieldErrors[field] || [])
+      map(states => states[entityId]?.fieldErrors[key] || [])
     );
+  }
+
+  /**
+   * Get errors for a single cell (sync). Use in templates.
+   */
+  getCellErrors(entityId: string, field: string, arrayIndex?: number): ValidationError[] {
+    const key = this.cellKey(field, arrayIndex);
+    const state = this.validationStates$.value[entityId];
+    return state?.fieldErrors[key] || [];
+  }
+
+  /**
+   * Set errors for a single cell (public API for manual errors).
+   */
+  setCellErrors(entityId: string, field: string, errors: ValidationError[], arrayIndex?: number): void {
+    this.setFieldErrors(entityId, field, errors, arrayIndex);
   }
 
   /**
@@ -261,13 +333,13 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
   }
 
   /**
-   * Check if field is valid
+   * Check if field/cell is valid
    */
-  isFieldValid(entityId: string, field: string): boolean {
+  isFieldValid(entityId: string, field: string, arrayIndex?: number): boolean {
     const state = this.validationStates$.value[entityId];
     if (!state) return true;
-
-    const errors = state.fieldErrors[field] || [];
+    const key = this.cellKey(field, arrayIndex);
+    const errors = state.fieldErrors[key] || [];
     return !errors.some(e => e.severity === 'error');
   }
 
@@ -281,11 +353,17 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
   }
 
   /**
-   * Clear field validation
+   * Clear field or single cell validation. If arrayIndex is undefined, clears the field and all its array cells (keys field, field_0, field_1, ...).
    */
-  clearFieldValidation(entityId: string, field: string): void {
+  clearFieldValidation(entityId: string, field: string, arrayIndex?: number): void {
     const state = this.getOrCreateState(entityId);
-    delete state.fieldErrors[field];
+    if (arrayIndex !== undefined) {
+      delete state.fieldErrors[this.cellKey(field, arrayIndex)];
+    } else {
+      delete state.fieldErrors[field];
+      const keysToDelete = Object.keys(state.fieldErrors).filter(key => key.startsWith(`${field}_`));
+      keysToDelete.forEach(key => delete state.fieldErrors[key]);
+    }
     this.updateState(entityId, state);
   }
 
@@ -332,11 +410,13 @@ export class ValidationService<T extends BaseEntity = BaseEntity> {
     const states = { ...this.validationStates$.value };
     states[entityId] = { ...state, lastValidated: new Date() };
     this.validationStates$.next(states);
+    this.stateChange$.next();
   }
 
-  private setFieldErrors(entityId: string, field: string, errors: ValidationError[]): void {
+  private setFieldErrors(entityId: string, field: string, errors: ValidationError[], arrayIndex?: number): void {
     const state = this.getOrCreateState(entityId);
-    state.fieldErrors[field] = errors;
+    const key = this.cellKey(field, arrayIndex);
+    state.fieldErrors[key] = errors;
     this.updateState(entityId, state);
   }
 

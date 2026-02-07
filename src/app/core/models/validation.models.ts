@@ -19,6 +19,8 @@ export interface ValidationError {
   code: string;
   severity: 'error' | 'warning' | 'info';
   metadata?: Record<string, any>;
+  /** Index within array field (for per-cell errors) */
+  arrayIndex?: number;
 }
 
 /**
@@ -55,6 +57,9 @@ export interface ValidationContext<T extends BaseEntity = BaseEntity> {
   
   /** Current row index (for array validation) */
   rowIndex?: number;
+  
+  /** Index within array field (for per-cell validation) */
+  arrayIndex?: number;
   
   /** Custom metadata */
   metadata?: Record<string, any>;
