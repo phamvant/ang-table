@@ -1,0 +1,124 @@
+<!-- app.component.html -->
+<div class="app-container">
+  
+  <!-- Header -->
+  <header class="app-header">
+    <h1>{{ title }}</h1>
+    <p class="subtitle">
+      Same Generic Component • Different Entity Types • Fully Reusable
+    </p>
+  </header>
+
+  <!-- View Switcher -->
+  <nav class="view-switcher">
+    <button mat-raised-button
+            [color]="currentView === 'orders' ? 'primary' : ''"
+            (click)="switchView('orders')">
+      <mat-icon>shopping_cart</mat-icon>
+      Orders (50)
+    </button>
+    
+    <button mat-raised-button
+            [color]="currentView === 'products' ? 'primary' : ''"
+            (click)="switchView('products')">
+      <mat-icon>inventory_2</mat-icon>
+      Products (100)
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="app-main">
+    
+    <!-- Orders Table -->
+    <div class="table-section" *ngIf="currentView === 'orders'">
+      <div class="section-header">
+        <h2>Order Management</h2>
+        <p>
+          Entity: <code>OrderEntity</code> → DTO: <code>OrderDTO</code>
+          (computed: total, tax, grandTotal)
+        </p>
+      </div>
+
+      <app-generic-table
+        [store]="orderStore"
+        [config]="orderConfig"
+        (save)="onOrderSave($event)"
+        (rowClick)="onRowClick($event)">
+        
+        <!-- Custom toolbar content -->
+        <div toolbar-left>
+          <h3>Orders</h3>
+        </div>
+        
+        <div toolbar-right>
+          <button mat-stroked-button>
+            <mat-icon>file_download</mat-icon>
+            Export
+          </button>
+        </div>
+      </app-generic-table>
+    </div>
+
+    <!-- Products Table -->
+    <div class="table-section" *ngIf="currentView === 'products'">
+      <div class="section-header">
+        <h2>Product Catalog</h2>
+        <p>
+          Entity: <code>ProductEntity</code> → DTO: <code>ProductDTO</code>
+          (computed: price, profit, marginPercent)
+        </p>
+      </div>
+
+      <app-generic-table
+        [store]="productStore"
+        [config]="productConfig"
+        (save)="onProductSave($event)"
+        (rowClick)="onRowClick($event)">
+        
+        <!-- Custom toolbar content -->
+        <div toolbar-left>
+          <h3>Products</h3>
+        </div>
+        
+        <div toolbar-right>
+          <button mat-stroked-button>
+            <mat-icon>add</mat-icon>
+            New Product
+          </button>
+        </div>
+      </app-generic-table>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="feature-list">
+      <div class="feature">
+        <mat-icon>check_circle</mat-icon>
+        <span>Fully Generic (TypeScript Generics)</span>
+      </div>
+      <div class="feature">
+        <mat-icon>check_circle</mat-icon>
+        <span>Multiple Entity Types</span>
+      </div>
+      <div class="feature">
+        <mat-icon>check_circle</mat-icon>
+        <span>Computed Fields</span>
+      </div>
+      <div class="feature">
+        <mat-icon>check_circle</mat-icon>
+        <span>Array Expansion</span>
+      </div>
+      <div class="feature">
+        <mat-icon>check_circle</mat-icon>
+        <span>O(1) Updates</span>
+      </div>
+      <div class="feature">
+        <mat-icon>check_circle</mat-icon>
+        <span>OnPush + TrackBy</span>
+      </div>
+    </div>
+  </footer>
+
+</div>

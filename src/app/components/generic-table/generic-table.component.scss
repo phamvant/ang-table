@@ -1,0 +1,187 @@
+// generic-table.component.scss
+.table-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  min-height: 64px;
+
+  .toolbar-left,
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .change-badge {
+    padding: 4px 12px;
+    background: #ff9800;
+    color: white;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  button mat-icon {
+    margin-right: 4px;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.generic-table {
+  width: 100%;
+  
+  th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #424242;
+    padding: 12px 16px;
+    border-bottom: 2px solid #e0e0e0;
+    text-align: left;
+    white-space: nowrap;
+
+    &.sticky-column {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      background: #f5f5f5;
+    }
+  }
+
+  td {
+    padding: 0;
+    border-bottom: 1px solid #e0e0e0;
+    vertical-align: middle;
+
+    &.hidden-cell {
+      display: none;
+    }
+
+    &.edited {
+      background: #fff3cd;
+      border-left: 3px solid #ff9800;
+    }
+
+    &.sticky-column {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+      background: #fff;
+    }
+  }
+
+  .cell-input {
+    width: 100%;
+    border: none;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    background: transparent;
+    outline: none;
+    
+    &:focus {
+      background: #e3f2fd;
+      border: 2px solid #2196f3;
+      padding: 10px 14px;
+    }
+
+    &:hover {
+      background: #fafafa;
+    }
+  }
+
+  .cell-select {
+    width: 100%;
+    border: none;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    background: transparent;
+    cursor: pointer;
+    
+    &:focus {
+      outline: 2px solid #2196f3;
+      background: #e3f2fd;
+    }
+
+    &:hover {
+      background: #fafafa;
+    }
+  }
+
+  .cell-checkbox {
+    margin: 12px 16px;
+    cursor: pointer;
+    transform: scale(1.2);
+  }
+
+  .cell-display {
+    display: block;
+    padding: 12px 16px;
+    min-height: 40px;
+  }
+
+  .change-indicator {
+    color: #ff9800;
+    font-size: 16px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  tr.row-edited:hover {
+    background: #fff9e6;
+  }
+
+  tr:hover {
+    background: #fafafa;
+    cursor: pointer;
+  }
+}
+
+mat-paginator {
+  border-top: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+@media (max-width: 768px) {
+  .table-toolbar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+
+    .toolbar-left,
+    .toolbar-right {
+      justify-content: space-between;
+    }
+  }
+
+  .generic-table {
+    th, td {
+      font-size: 12px;
+    }
+
+    .cell-input,
+    .cell-select {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+  }
+}
