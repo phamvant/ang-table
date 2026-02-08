@@ -36,18 +36,20 @@ export class TableViewService<
   
   /**
    * Expand entities into table rows
-   * 
+   *
    * @param dtos - Entity DTOs with computed fields
    * @param columns - Column configuration
    * @param rowsPerEntity - Number of rows per entity (for array expansion)
+   * @param expandedRowArrayFields - When set, expandedIndex i uses this array field for all array columns on that row
    */
   expandRows(
     dtos: TDTO[],
     columns: ColumnConfig<TEntity>[],
-    rowsPerEntity: number = 1
+    rowsPerEntity: number = 1,
+    expandedRowArrayFields?: (keyof TEntity)[]
   ): ExpandedRow<TDTO>[] {
     const arrayColumns = columns.filter(c => c.type === 'array');
-    
+
     // No array columns = no expansion needed
     if (arrayColumns.length === 0 || rowsPerEntity === 1) {
       return dtos.map(dto => ({
@@ -56,6 +58,10 @@ export class TableViewService<
         data: dto
       }));
     }
+
+    const useRowBasedArray =
+      expandedRowArrayFields &&
+      expandedRowArrayFields.length === rowsPerEntity;
 
     // Expand each entity into multiple rows
     const expanded: ExpandedRow<TDTO>[] = [];
@@ -68,21 +74,21 @@ export class TableViewService<
           data: dto
         };
 
-        // Map array values to dynamic fields
         arrayColumns.forEach(col => {
-          if (col.arrayField && col.arrayIndex !== undefined) {
-            const arrayData = (dto as any)[col.arrayField];
-            if (Array.isArray(arrayData)) {
-              // For multi-row expansion, determine which array item to show
-              // based on expandedIndex and arrayIndex
-              const itemIndex = this.getArrayItemIndex(
-                i,
-                col.arrayIndex,
-                rowsPerEntity
-              );
-              row[col.field] = arrayData[itemIndex] ?? null;
-            }
-          }
+          if (col.arrayIndex === undefined) return;
+
+          const arrayField = useRowBasedArray
+            ? (expandedRowArrayFields![i] as string)
+            : col.arrayField;
+          if (!arrayField) return;
+
+          const arrayData = (dto as any)[arrayField];
+          if (!Array.isArray(arrayData)) return;
+
+          const itemIndex = useRowBasedArray
+            ? col.arrayIndex
+            : this.getArrayItemIndex(i, col.arrayIndex, rowsPerEntity);
+          row[col.field] = arrayData[itemIndex] ?? null;
         });
 
         expanded.push(row);

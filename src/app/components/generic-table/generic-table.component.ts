@@ -144,7 +144,8 @@ export class GenericTableComponent<
         const expandedRows = this.viewService.expandRows(
           dtos,
           this.config.columns,
-          this.config.rowsPerEntity || 1
+          this.config.rowsPerEntity || 1,
+          this.config.expandedRowArrayFields
         );
         this.dataSource.data = expandedRows;
         this.cdr.markForCheck();
@@ -187,17 +188,30 @@ export class GenericTableComponent<
   }
 
   /**
+   * Effective array field for this row (when expandedRowArrayFields is set, row picks the array).
+   */
+  getArrayFieldForRow(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): keyof TEntity | undefined {
+    if (col.type !== 'array') return undefined;
+    const fields = this.config.expandedRowArrayFields;
+    if (fields && row.expandedIndex >= 0 && row.expandedIndex < fields.length) {
+      return fields[row.expandedIndex];
+    }
+    return col.arrayField;
+  }
+
+  /**
    * Get cell value (edited or original)
    */
   getCellValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
     if (!this.editBuffer) return this.getOriginalValue(row, col);
 
-    if (col.type === 'array' && col.arrayField && col.arrayIndex !== undefined) {
-      // Array item
+    if (col.type === 'array' && col.arrayIndex !== undefined) {
+      const arrayField = this.getArrayFieldForRow(row, col);
+      if (!arrayField) return this.getOriginalValue(row, col);
       const original = row[col.field];
       return this.editBuffer.getArrayValue(
         row.entityId,
-        col.arrayField,
+        arrayField,
         col.arrayIndex,
         original
       );
@@ -239,10 +253,12 @@ export class GenericTableComponent<
 
     const entity = this.store.getOne(row.entityId);
 
-    if (col.type === 'array' && col.arrayField && col.arrayIndex !== undefined) {
+    if (col.type === 'array' && col.arrayIndex !== undefined) {
+      const arrayField = this.getArrayFieldForRow(row, col);
+      if (!arrayField) return;
       this.editBuffer.updateArrayItem(
         row.entityId,
-        col.arrayField,
+        arrayField,
         col.arrayIndex,
         value
       );
@@ -250,7 +266,7 @@ export class GenericTableComponent<
         this.fieldEdit.emit({
           entityId: row.entityId,
           entity,
-          field: col.arrayField,
+          field: arrayField,
           value,
           arrayIndex: col.arrayIndex
         });
@@ -275,6 +291,18 @@ export class GenericTableComponent<
    */
   getCellErrors(entityId: string, field: string, arrayIndex?: number): ValidationError[] {
     return this.validationService?.getCellErrors(entityId, field, arrayIndex) ?? [];
+  }
+
+  /**
+   * Get validation errors for a cell using effective array field per row (for array columns when expandedRowArrayFields is set).
+   */
+  getCellErrorsForCell(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): ValidationError[] {
+    if (col.type === 'array') {
+      const field = this.getArrayFieldForRow(row, col) ?? col.arrayField;
+      if (field === undefined) return [];
+      return this.getCellErrors(row.entityId, field as string, col.arrayIndex);
+    }
+    return this.getCellErrors(row.entityId, col.field, undefined);
   }
 
   /**

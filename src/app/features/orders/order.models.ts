@@ -132,15 +132,13 @@ export function createOrderTableConfig(): TableConfig<OrderEntity> {
     }
   ];
 
-  // Array columns (48 columns: key-1 ~ key-48)
+  // Array columns (48 columns: key-1 ~ key-48). Row picks array (row1=arrayA, row2=arrayB) via expandedRowArrayFields.
   for (let i = 0; i < 48; i++) {
-    const arrayField: 'arrayA' | 'arrayB' = i % 2 === 0 ? 'arrayA' : 'arrayB';
-    
     columns.push({
       field: `key-${i + 1}`,
       header: `K${i + 1}`,
       type: 'array',
-      arrayField,
+      arrayField: 'arrayA', // overridden per row by expandedRowArrayFields
       arrayIndex: i,
       editable: true,
       editType: 'text',
@@ -151,6 +149,7 @@ export function createOrderTableConfig(): TableConfig<OrderEntity> {
   return {
     columns,
     rowsPerEntity: 2, // arrayA + arrayB
+    expandedRowArrayFields: ['arrayA', 'arrayB'] as (keyof OrderEntity)[],
     pageSize: 10
   };
 }

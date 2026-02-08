@@ -74,7 +74,14 @@ export interface TableConfig<T extends BaseEntity = BaseEntity> {
   
   /** Rows per entity (for array expansion) */
   rowsPerEntity?: number;
-  
+
+  /**
+   * Array field to use per expanded row when set.
+   * Length must equal rowsPerEntity; expandedIndex i uses expandedRowArrayFields[i].
+   * When absent, each column uses its own arrayField.
+   */
+  expandedRowArrayFields?: (keyof T)[];
+
   /** Page size */
   pageSize?: number;
   
