@@ -27,6 +27,8 @@ export interface OrderDTO extends BaseDTO<OrderEntity> {
   total: number;      // price * qty
   tax: number;        // total * 0.1
   grandTotal: number; // total + tax
+
+  test: string;
 }
 
 /**
@@ -34,6 +36,7 @@ export interface OrderDTO extends BaseDTO<OrderEntity> {
  */
 export const ORDER_COMPUTE: ComputeConfig<OrderEntity, OrderDTO> = {
   compute: (entity) => {
+    const test = 'test';
     const total = entity.price * entity.qty;
     const tax = total * 0.1;
     const grandTotal = total + tax;
@@ -42,7 +45,8 @@ export const ORDER_COMPUTE: ComputeConfig<OrderEntity, OrderDTO> = {
       ...entity,
       total,
       tax,
-      grandTotal
+      grandTotal,
+      test
     };
   }
 };
@@ -129,6 +133,15 @@ export function createOrderTableConfig(): TableConfig<OrderEntity> {
       width: '120px',
       dependsOn: ['price', 'qty'],
       formatter: (value) => `$${(value || 0).toFixed(2)}`
+    },
+    {
+      field: 'test',
+      header: 'Test',
+      type: 'base',
+      rowspan: 1,
+      width: '120px',
+      valueAccessor: (row) => row.expandedIndex === 0 ? row.data.test : '',
+      formatter: (value) => value
     }
   ];
 
@@ -167,6 +180,8 @@ export function generateMockOrders(count: number): OrderDTO[] {
     status: (['pending', 'confirmed', 'shipped', 'delivered'] as const)[i % 4],
     arrayA: Array.from({ length: 48 }, (_, j) => `A${i + 1}-${j + 1}`),
     arrayB: Array.from({ length: 48 }, (_, j) => `B${i + 1}-${j + 1}`),
+
+    test: 'test',
     total: 0,      // Will be computed
     tax: 0,        // Will be computed
     grandTotal: 0  // Will be computed

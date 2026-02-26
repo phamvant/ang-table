@@ -226,6 +226,7 @@ export class GenericTableComponent<
    * Get original value from row
    */
   private getOriginalValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
+    if (col.valueAccessor) return col.valueAccessor(row, col);
     if (col.type === 'array') {
       return row[col.field];
     }

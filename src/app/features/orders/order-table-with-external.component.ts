@@ -37,9 +37,9 @@ import { ORDER_VALIDATION_WITH_EXTERNAL } from './order.validation.external';
       [config]="orderConfig"
       [saveUpdatesStore]="false"
       [validationService]="validationService"
-      (save)="onSave($event)"
-      (fieldEdit)="onFieldEdit($event.entityId, $event.entity, $event.field, $event.value, $event.arrayIndex)">
+      (save)="onSave($event)">
     </app-generic-table>
+    <!-- (fieldEdit)="onFieldEdit($event.entityId, $event.entity, $event.field, $event.value, $event.arrayIndex)"> -->
   `,
   providers: [
     {
@@ -141,7 +141,8 @@ export class OrderTableWithExternalComponent implements OnInit {
         arrayB: Array(48).fill('B'),
         total: 0,
         tax: 0,
-        grandTotal: 0
+        grandTotal: 0,
+        test: 'test'
       }
     ];
     

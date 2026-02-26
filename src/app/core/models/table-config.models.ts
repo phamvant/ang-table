@@ -54,6 +54,9 @@ export interface ColumnConfig<T extends BaseEntity = BaseEntity> {
   
   /** Value formatter */
   formatter?: (value: any, row?: any) => string;
+
+  /** Per-row value override. Receives the full expanded row (with expandedIndex) and the column config. */
+  valueAccessor?: (row: { data: any; expandedIndex: number; [key: string]: any }, col: ColumnConfig<T>) => any;
   
   /** CSS class */
   cssClass?: string;
