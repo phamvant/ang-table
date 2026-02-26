@@ -57,10 +57,17 @@ export interface ColumnConfig<T extends BaseEntity = BaseEntity> {
 
   /**
    * Per-row value override. Receives the full expanded row (with expandedIndex), the column config,
-   * and the current buffered value for col.field (edited value if in progress, raw original otherwise).
-   * Use bufferedValue when the field you want to expose for editing differs from the DTO field you read.
+   * and the current buffered value for saveField (edited value if in progress, raw DTO value otherwise).
+   * Use bufferedValue to reflect live edits in the cell display.
    */
   valueAccessor?: (row: { data: any; expandedIndex: number; [key: string]: any }, col: ColumnConfig<T>, bufferedValue?: any) => any;
+
+  /**
+   * The actual DTO field to use in the edit buffer and save payload.
+   * Required when col.field is a virtual/display-only key that does not exist in the DTO.
+   * Defaults to col.field when omitted.
+   */
+  saveField?: string;
   
   /** CSS class */
   cssClass?: string;

@@ -173,7 +173,11 @@ export class GenericTableComponent<
     if (!col.rowspan) return null;
 
     const rowsPerEntity = this.config.rowsPerEntity || 1;
-    return rowIndex % rowsPerEntity === 0 ? col.rowspan : null;
+    const posInEntity = rowIndex % rowsPerEntity;
+    // Render a cell only at positions that are multiples of the rowspan.
+    // rowspan:2 → renders at pos 0, hides pos 1.
+    // rowspan:1 → renders at every pos (0,1,...).
+    return posInEntity % col.rowspan === 0 ? col.rowspan : null;
   }
 
   /**
@@ -184,7 +188,8 @@ export class GenericTableComponent<
     if (!col.rowspan) return false;
 
     const rowsPerEntity = this.config.rowsPerEntity || 1;
-    return rowIndex % rowsPerEntity !== 0;
+    const posInEntity = rowIndex % rowsPerEntity;
+    return posInEntity % col.rowspan !== 0;
   }
 
   /**
@@ -197,6 +202,40 @@ export class GenericTableComponent<
       return fields[row.expandedIndex];
     }
     return col.arrayField;
+  }
+
+  /**
+   * Row-scoped edit buffer key for valueAccessor columns.
+   * Keeps edits on different expanded rows independent of each other.
+   */
+  private getBufferKey(col: ColumnConfig<TEntity>, expandedIndex: number): keyof TEntity {
+    return (col.valueAccessor ? `${col.field}__${expandedIndex}` : col.field) as keyof TEntity;
+  }
+
+  /** DTO field name to use when writing to the save payload. */
+  private getSaveField(col: ColumnConfig<TEntity>): string {
+    return (col as any).saveField ?? col.field;
+  }
+
+  /**
+   * Remap row-scoped buffer keys (field__N) back to DTO save fields before emitting save.
+   */
+  private remapChangesForSave(entityId: string): Partial<TEntity> {
+    const fields = this.editBuffer!.getChanges(entityId).fields;
+    const remapped: Partial<TEntity> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      const sepIdx = key.lastIndexOf('__');
+      if (sepIdx !== -1 && /^\d+$/.test(key.substring(sepIdx + 2))) {
+        const fieldPart = key.substring(0, sepIdx);
+        const col = this.config.columns.find(c => c.field === fieldPart && c.valueAccessor);
+        if (col) {
+          remapped[this.getSaveField(col) as keyof TEntity] = value as any;
+          continue;
+        }
+      }
+      remapped[key as keyof TEntity] = value as any;
+    }
+    return remapped;
   }
 
   /**
@@ -218,10 +257,11 @@ export class GenericTableComponent<
     } else {
       // Base/computed field
       if (col.valueAccessor) {
-        // Pass the current effective value of col.field (edited or original) as bufferedValue.
-        // valueAccessor decides per-row what to show, regardless of how col.field maps to the DTO.
-        const rawOriginal = (row.data as any)[col.field];
-        const currentValue = this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, rawOriginal);
+        // Use a row-scoped buffer key so edits on different expanded rows stay isolated.
+        // Fall back to saveField (the actual DTO field) for the raw original value.
+        const bufferKey = this.getBufferKey(col, row.expandedIndex);
+        const rawOriginal = (row.data as any)[this.getSaveField(col)];
+        const currentValue = this.editBuffer.getFieldValue(row.entityId, bufferKey, rawOriginal);
         return col.valueAccessor(row, col, currentValue);
       }
       const original = this.getOriginalValue(row, col);
@@ -234,7 +274,7 @@ export class GenericTableComponent<
    */
   private getOriginalValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
     if (col.valueAccessor) {
-      const rawValue = (row.data as any)[col.field];
+      const rawValue = (row.data as any)[this.getSaveField(col)];
       return col.valueAccessor(row, col, rawValue);
     }
     if (col.type === 'array') {
@@ -283,12 +323,13 @@ export class GenericTableComponent<
         });
       }
     } else {
-      this.editBuffer.updateField(row.entityId, col.field as keyof TEntity, value);
+      const bufferKey = this.getBufferKey(col, row.expandedIndex);
+      this.editBuffer.updateField(row.entityId, bufferKey, value);
       if (entity) {
         this.fieldEdit.emit({
           entityId: row.entityId,
           entity,
-          field: col.field as keyof TEntity,
+          field: this.getSaveField(col) as keyof TEntity,
           value
         });
       }
@@ -323,20 +364,21 @@ export class GenericTableComponent<
     if (!this.editBuffer || !this.autoSave) return;
 
     const changes = this.editBuffer.getChanges(row.entityId);
-    if (Object.keys(changes.fields).length === 0 && changes.arrays.length === 0) {
+    const remappedFields = this.remapChangesForSave(row.entityId);
+    if (Object.keys(remappedFields).length === 0 && changes.arrays.length === 0) {
       return;
     }
 
     try {
       this.save.emit({
         id: row.entityId,
-        changes: changes.fields,
+        changes: remappedFields,
         arrays: changes.arrays
       });
 
       if (this.saveUpdatesStore) {
-        if (Object.keys(changes.fields).length > 0) {
-          this.store.updateOne(row.entityId, changes.fields);
+        if (Object.keys(remappedFields).length > 0) {
+          this.store.updateOne(row.entityId, remappedFields);
         }
         for (const edit of changes.arrays) {
           const entity = this.store.getOne(row.entityId);
@@ -370,16 +412,17 @@ export class GenericTableComponent<
     try {
       for (const entityId of dirtyEntities) {
         const changes = this.editBuffer.getChanges(entityId);
+        const remappedFields = this.remapChangesForSave(entityId);
 
         this.save.emit({
           id: entityId,
-          changes: changes.fields,
+          changes: remappedFields,
           arrays: changes.arrays
         });
 
         if (this.saveUpdatesStore) {
-          if (Object.keys(changes.fields).length > 0) {
-            this.store.updateOne(entityId, changes.fields);
+          if (Object.keys(remappedFields).length > 0) {
+            this.store.updateOne(entityId, remappedFields);
           }
           for (const edit of changes.arrays) {
             const entity = this.store.getOne(entityId);

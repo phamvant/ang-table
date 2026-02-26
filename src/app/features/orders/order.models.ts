@@ -139,8 +139,9 @@ export function createOrderTableConfig(): TableConfig<OrderEntity> {
       header: 'Test',
       type: 'base',
       rowspan: 1,
+      saveField: 'test',
       width: '120px',
-      valueAccessor: (row) => row.expandedIndex === 0 ? row.data.test : '',
+      valueAccessor: (_row, _col, bufferedValue) => _row.expandedIndex === 0 ? bufferedValue : '',
       formatter: (value) => value
     }
   ];
