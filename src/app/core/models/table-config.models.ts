@@ -55,8 +55,12 @@ export interface ColumnConfig<T extends BaseEntity = BaseEntity> {
   /** Value formatter */
   formatter?: (value: any, row?: any) => string;
 
-  /** Per-row value override. Receives the full expanded row (with expandedIndex) and the column config. */
-  valueAccessor?: (row: { data: any; expandedIndex: number; [key: string]: any }, col: ColumnConfig<T>) => any;
+  /**
+   * Per-row value override. Receives the full expanded row (with expandedIndex), the column config,
+   * and the current buffered value for col.field (edited value if in progress, raw original otherwise).
+   * Use bufferedValue when the field you want to expose for editing differs from the DTO field you read.
+   */
+  valueAccessor?: (row: { data: any; expandedIndex: number; [key: string]: any }, col: ColumnConfig<T>, bufferedValue?: any) => any;
   
   /** CSS class */
   cssClass?: string;

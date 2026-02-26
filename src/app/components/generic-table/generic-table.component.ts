@@ -218,13 +218,11 @@ export class GenericTableComponent<
     } else {
       // Base/computed field
       if (col.valueAccessor) {
-        // Get the buffered value using the raw DTO field as fallback (not valueAccessor),
-        // then let valueAccessor decide what to display per expanded row.
-        // This prevents edits on one expanded row from bleeding into another.
+        // Pass the current effective value of col.field (edited or original) as bufferedValue.
+        // valueAccessor decides per-row what to show, regardless of how col.field maps to the DTO.
         const rawOriginal = (row.data as any)[col.field];
-        const buffered = this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, rawOriginal);
-        const syntheticRow = { ...row, data: { ...row.data, [col.field]: buffered } };
-        return col.valueAccessor(syntheticRow, col);
+        const currentValue = this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, rawOriginal);
+        return col.valueAccessor(row, col, currentValue);
       }
       const original = this.getOriginalValue(row, col);
       return this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, original);
@@ -235,7 +233,10 @@ export class GenericTableComponent<
    * Get original value from row
    */
   private getOriginalValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
-    if (col.valueAccessor) return col.valueAccessor(row, col);
+    if (col.valueAccessor) {
+      const rawValue = (row.data as any)[col.field];
+      return col.valueAccessor(row, col, rawValue);
+    }
     if (col.type === 'array') {
       return row[col.field];
     }

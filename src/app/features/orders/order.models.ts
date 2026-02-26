@@ -135,7 +135,7 @@ export function createOrderTableConfig(): TableConfig<OrderEntity> {
       formatter: (value) => `$${(value || 0).toFixed(2)}`
     },
     {
-      field: 'test',
+      field: 'testt',
       header: 'Test',
       type: 'base',
       rowspan: 1,
