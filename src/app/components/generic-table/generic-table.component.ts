@@ -217,6 +217,15 @@ export class GenericTableComponent<
       );
     } else {
       // Base/computed field
+      if (col.valueAccessor) {
+        // Get the buffered value using the raw DTO field as fallback (not valueAccessor),
+        // then let valueAccessor decide what to display per expanded row.
+        // This prevents edits on one expanded row from bleeding into another.
+        const rawOriginal = (row.data as any)[col.field];
+        const buffered = this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, rawOriginal);
+        const syntheticRow = { ...row, data: { ...row.data, [col.field]: buffered } };
+        return col.valueAccessor(syntheticRow, col);
+      }
       const original = this.getOriginalValue(row, col);
       return this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, original);
     }
