@@ -61,6 +61,14 @@ export interface ColumnConfig<T extends BaseEntity = BaseEntity> {
    * Use bufferedValue when the field you want to expose for editing differs from the DTO field you read.
    */
   valueAccessor?: (row: { data: any; expandedIndex: number; [key: string]: any }, col: ColumnConfig<T>, bufferedValue?: any) => any;
+
+  /**
+   * Inverse of valueAccessor — maps the user-edited display value back to an entity patch.
+   * Called by onCellEdit when defined; the returned partial entity is written to the edit buffer.
+   * Define this whenever valueAccessor transforms/derives the displayed value so edits round-trip
+   * correctly to the underlying entity fields.
+   */
+  valueEditor?: (editedValue: any, row: { data: any; expandedIndex: number; [key: string]: any }, col: ColumnConfig<T>) => Partial<T>;
   
   /** CSS class */
   cssClass?: string;

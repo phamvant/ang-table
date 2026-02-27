@@ -135,13 +135,17 @@ export function createOrderTableConfig(): TableConfig<OrderEntity> {
       formatter: (value) => `$${(value || 0).toFixed(2)}`
     },
     {
-      field: 'testt',
-      header: 'Test',
+      // Demo: valueAccessor + valueEditor pair.
+      // Displays customer name (row 0 only); edits write back to the 'customer' entity field.
+      field: 'customer',
+      header: 'Customer (alias)',
       type: 'base',
       rowspan: 1,
-      width: '120px',
-      valueAccessor: (row) => row.expandedIndex === 0 ? row.data.test : '',
-      formatter: (value) => value
+      width: '180px',
+      editable: true,
+      editType: 'text',
+      valueAccessor: (row) => row.expandedIndex === 0 ? `[${row.data.customer}]` : '',
+      valueEditor: (editedValue) => ({ customer: (editedValue as string).replace(/^\[|\]$/g, '') })
     }
   ];
 

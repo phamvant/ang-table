@@ -200,46 +200,46 @@ export class GenericTableComponent<
   }
 
   /**
-   * Get cell value (edited or original)
+   * Get cell value (edited or original).
+   *
+   * Priority / case order:
+   *   1. type === 'array'      → read from editBuffer's array slot (or original array element)
+   *   2. valueAccessor defined → compute display value from buffered field value
+   *   3. base / computed       → read buffered scalar field directly
    */
   getCellValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
-    if (!this.editBuffer) return this.getOriginalValue(row, col);
+    if (!this.editBuffer) return this.getRawValue(row, col);
 
+    // Case 1: array column
     if (col.type === 'array' && col.arrayIndex !== undefined) {
       const arrayField = this.getArrayFieldForRow(row, col);
-      if (!arrayField) return this.getOriginalValue(row, col);
+      if (!arrayField) return this.getRawValue(row, col);
       const original = row[col.field];
-      return this.editBuffer.getArrayValue(
-        row.entityId,
-        arrayField,
-        col.arrayIndex,
-        original
-      );
-    } else {
-      // Base/computed field
-      if (col.valueAccessor) {
-        // Pass the current effective value of col.field (edited or original) as bufferedValue.
-        // valueAccessor decides per-row what to show, regardless of how col.field maps to the DTO.
-        const rawOriginal = (row.data as any)[col.field];
-        const currentValue = this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, rawOriginal);
-        return col.valueAccessor(row, col, currentValue);
-      }
-      const original = this.getOriginalValue(row, col);
-      return this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, original);
+      return this.editBuffer.getArrayValue(row.entityId, arrayField, col.arrayIndex, original);
     }
+
+    // Case 2: custom per-row display via valueAccessor
+    if (col.valueAccessor) {
+      const rawOriginal = (row.data as any)[col.field];
+      const buffered = this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, rawOriginal);
+      return col.valueAccessor(row, col, buffered);
+    }
+
+    // Case 3: direct base / computed scalar
+    const original = (row.data as any)[col.field];
+    return this.editBuffer.getFieldValue(row.entityId, col.field as keyof TEntity, original);
   }
 
   /**
-   * Get original value from row
+   * Raw value from row data — used when no edit buffer is available.
+   *
+   *   1. type === 'array'      → row[col.field] (pre-flattened by TableViewService)
+   *   2. valueAccessor defined → delegated to accessor with raw DTO value
+   *   3. base / computed       → row.data[col.field]
    */
-  private getOriginalValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
-    if (col.valueAccessor) {
-      const rawValue = (row.data as any)[col.field];
-      return col.valueAccessor(row, col, rawValue);
-    }
-    if (col.type === 'array') {
-      return row[col.field];
-    }
+  private getRawValue(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>): any {
+    if (col.type === 'array') return row[col.field];
+    if (col.valueAccessor) return col.valueAccessor(row, col, (row.data as any)[col.field]);
     return (row.data as any)[col.field];
   }
 
@@ -257,40 +257,41 @@ export class GenericTableComponent<
   }
 
   /**
-   * Handle cell edit
+   * Handle cell edit.
+   *
+   * Case 1: array column           → update single array slot in edit buffer
+   * Case 2: valueEditor defined    → map display value back to entity patch, apply each field
+   * Case 3: direct base / computed → update scalar field in edit buffer
    */
   onCellEdit(row: ExpandedRow<TDTO>, col: ColumnConfig<TEntity>, value: any): void {
     if (!this.editBuffer) return;
 
     const entity = this.store.getOne(row.entityId);
 
+    // Case 1: array column
     if (col.type === 'array' && col.arrayIndex !== undefined) {
       const arrayField = this.getArrayFieldForRow(row, col);
       if (!arrayField) return;
-      this.editBuffer.updateArrayItem(
-        row.entityId,
-        arrayField,
-        col.arrayIndex,
-        value
-      );
+      this.editBuffer.updateArrayItem(row.entityId, arrayField, col.arrayIndex, value);
       if (entity) {
-        this.fieldEdit.emit({
-          entityId: row.entityId,
-          entity,
-          field: arrayField,
-          value,
-          arrayIndex: col.arrayIndex
-        });
+        this.fieldEdit.emit({ entityId: row.entityId, entity, field: arrayField, value, arrayIndex: col.arrayIndex });
       }
+
+    // Case 2: valueEditor — maps display value back to one or more entity fields
+    } else if (col.valueEditor) {
+      const patch = col.valueEditor(value, row, col);
+      for (const [field, fieldValue] of Object.entries(patch) as [keyof TEntity, any][]) {
+        this.editBuffer.updateField(row.entityId, field, fieldValue);
+        if (entity) {
+          this.fieldEdit.emit({ entityId: row.entityId, entity, field, value: fieldValue });
+        }
+      }
+
+    // Case 3: direct scalar field
     } else {
       this.editBuffer.updateField(row.entityId, col.field as keyof TEntity, value);
       if (entity) {
-        this.fieldEdit.emit({
-          entityId: row.entityId,
-          entity,
-          field: col.field as keyof TEntity,
-          value
-        });
+        this.fieldEdit.emit({ entityId: row.entityId, entity, field: col.field as keyof TEntity, value });
       }
     }
 
